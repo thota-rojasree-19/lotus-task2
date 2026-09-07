@@ -65,8 +65,6 @@ To reset the database manually:
 
 python harness/reset_db.py
 
-The reset process removes the existing database and recreates the required schema and seed data.
-
 6. Start the API Server
 
 Run:
@@ -77,8 +75,6 @@ The Flask API starts locally at:
 
 http://127.0.0.1:5000
 
-Keep the server running while manually testing the API.
-
 7. Run the Complete Test Pipeline
 
 The recommended command is:
@@ -87,10 +83,13 @@ bash run-tests.sh
 
 The pipeline runs in this order:
 
-1. Validate openapi.yaml
-2. Reset the SQLite database
-3. Run contract checks
-4. Run pytest HTTP tests
+Validate openapi.yaml
+
+Reset the SQLite database
+
+Run contract checks
+
+Run pytest HTTP tests
 
 A successful run ends with:
 
@@ -152,21 +151,13 @@ Step 4 – Create Reservation
 
 curl -X POST http://127.0.0.1:5000/reservations   -H "Content-Type: application/json"   -d '{"customer_id":3,"table_id":2,"reservation_time":"2026-09-10T19:00:00","party_size":2}'
 
-The reservation should be created successfully if:
-
-The table exists
-
-The table has enough seats
-
-There is no conflicting active reservation
+The reservation should be created successfully if the table has enough seats and there is no conflicting active reservation.
 
 Step 5 – Create Order
 
 curl -X POST http://127.0.0.1:5000/orders   -H "Content-Type: application/json"   -d '{"customer_id":3,"items":[{"menu_item_id":1,"quantity":2}]}'
 
-The backend calculates the price from SQLite.
-
-The client does not supply or control the price.
+The backend calculates the price from SQLite. The client does not supply or control the price.
 
 Save the returned order ID.
 
@@ -339,9 +330,13 @@ Order Status
 Allowed statuses:
 
 NEW
+
 PREPARING
+
 READY
+
 COMPLETED
+
 CANCELLED
 
 Valid transitions:
