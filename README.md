@@ -1,119 +1,632 @@
-# Product 004 — Restaurant OpenAPI + SQLite Interface Harness
+Product 004 – Restaurant OpenAPI + SQLite Interface Harness
 
-REST API for a restaurant management system backed by SQLite.
-Implements the 10 operations defined in `openapi.yaml` using Flask.
+1. Overview
 
-## Prerequisites
+This project implements a reusable development and testing Harness for OpenAPI-first HTTP interfaces backed by SQLite.
 
-- Python 3.10 or later
+The canonical Restaurant backend is used to prove that the Harness can:
 
-## Setup
+Validate the OpenAPI contract before the application starts
 
-```bash
+Create and reset a clean SQLite database
+
+Seed predictable test data
+
+Run a Flask HTTP API
+
+Validate API requests and responses against the OpenAPI contract
+
+Test business rules through HTTP requests
+
+Run the complete workflow with one command
+
+Be reused for additional OpenAPI endpoints
+
+The project does not include a frontend because the SOW focuses on the HTTP interface, SQLite backend, and reusable testing Harness.
+
+2. Prerequisites
+
+Python 3.10+
+
+Git
+
+Bash / Git Bash on Windows
+
+Check Python:
+
+python --version
+
+3. Clone the Repository
+
+git clone https://github.com/thota-rojasree-19/lotus-task2.git
+cd lotus-task2
+
+4. Install Dependencies
+
 pip install -r requirements.txt
-```
 
-## Running the API server
+5. Database Setup and Reset
 
-```bash
-python src/app.py
-```
+The project uses SQLite.
 
-Server starts at `http://localhost:5000`.
+The database file is:
 
-## Full test pipeline
+restaurant.db
 
-```bash
-bash run-tests.sh
-```
+The database is disposable and is recreated from:
 
-Steps executed in order:
-1. `python harness/validate_openapi.py` — validate the OpenAPI contract first
-2. `python harness/reset_db.py` — reset the database to a clean baseline
-3. `python harness/contract.py` — end-to-end contract checks
-4. `pytest tests/ -v --tb=short` — full pytest suite
+schema.sql
+seed.sql
 
-## Running individual steps
+Reset the database manually:
 
-```bash
-# Validate the OpenAPI spec
-python harness/validate_openapi.py
-
-# Reset the database
 python harness/reset_db.py
 
-# Run the contract harness only
+The reset process removes the existing database and recreates the required schema and seed data.
+
+6. Start the API Server
+
+Run:
+
+python src/app.py
+
+The Flask API starts locally.
+
+The API can then be accessed at:
+
+http://127.0.0.1:5000
+
+Keep the server running while manually testing the API.
+
+7. Run the Complete Test Pipeline
+
+The recommended command is:
+
+bash run-tests.sh
+
+The pipeline runs in this order:
+
+Validate openapi.yaml
+
+Reset the SQLite database
+
+Run contract checks
+
+Run pytest HTTP tests
+
+A successful run ends with:
+
+All steps passed.
+
+8. Run Individual Test Steps
+
+Validate OpenAPI
+
+python harness/validate_openapi.py
+
+Reset Database
+
+python harness/reset_db.py
+
+Run Contract Checks
+
 python harness/contract.py
 
-# Run pytest only (requires DB to be seeded first)
-pytest tests/ -v
-```
+Run Pytest
 
-## Project structure
+pytest -q
 
-```
-openapi.yaml              Contract / source of truth (OpenAPI 3.0.3)
-schema.sql                Database DDL — 7 SOW-specified tables
-seed.sql                  Baseline test data
+9. Quick API Workflow
 
-src/
-  app.py                  Flask application and route registration
-  db.py                   SQLite connection helpers (transaction, query_one, query_all)
-  handlers.py             One function per operationId
+The following workflow demonstrates the main Restaurant use case.
 
-harness/
-  validate_openapi.py     Validates openapi.yaml structure and operationId coverage
-  reset_db.py             Drops and recreates restaurant.db from schema + seed
-  contract.py             End-to-end contract tests via Flask test client
+Step 1 – Get Menu
+
+curl http://127.0.0.1:5000/menu
+
+Choose a menu item ID from the response.
+
+For example:
+
+menu_item_id = 1
+
+Step 2 – Create Customer
+
+curl -X POST http://127.0.0.1:5000/customers   -H "Content-Type: application/json"   -d '{"name":"Alice","email":"alice@example.com"}'
+
+Save the returned customer ID.
+
+For example:
+
+customer_id = 3
+
+Step 3 – Get Dining Tables
+
+curl http://127.0.0.1:5000/tables
+
+Choose a table with at least 2 seats.
+
+For example:
+
+table_id = 2
+
+Step 4 – Create Reservation
+
+curl -X POST http://127.0.0.1:5000/reservations   -H "Content-Type: application/json"   -d '{"customer_id":3,"table_id":2,"reservation_time":"2026-09-10T19:00:00","party_size":2}'
+
+The reservation should be created successfully if the table has enough seats and there is no conflicting active reservation.
+
+Step 5 – Create Order
+
+curl -X POST http://127.0.0.1:5000/orders   -H "Content-Type: application/json"   -d '{"customer_id":3,"items":[{"menu_item_id":1,"quantity":2}]}'
+
+The backend calculates the price from SQLite.
+
+The client does not supply or control the price.
+
+Save the returned order ID.
+
+For example:
+
+order_id = 1
+
+Step 6 – Get Order
+
+curl http://127.0.0.1:5000/orders/1
+
+Verify:
+
+Customer
+
+Items
+
+Quantity
+
+Unit price
+
+Line total
+
+Server-calculated order total
+
+Current status
+
+Step 7 – Update Order Status
+
+Valid transitions are:
+
+NEW → PREPARING
+PREPARING → READY
+READY → COMPLETED
+
+There is also:
+
+NEW → CANCELLED
+
+Example:
+
+curl -X PATCH http://127.0.0.1:5000/orders/1/status   -H "Content-Type: application/json"   -d '{"status":"PREPARING"}'
+
+Then:
+
+curl -X PATCH http://127.0.0.1:5000/orders/1/status   -H "Content-Type: application/json"   -d '{"status":"READY"}'
+
+Then:
+
+curl -X PATCH http://127.0.0.1:5000/orders/1/status   -H "Content-Type: application/json"   -d '{"status":"COMPLETED"}'
+
+Invalid state transitions are rejected.
+
+Step 8 – Get Customer Orders
+
+curl http://127.0.0.1:5000/customers/3/orders
+
+This returns the customer's order history.
+
+10. API Endpoints
+
+Operation ID
+
+Method
+
+Endpoint
+
+listMenu
+
+GET
+
+/menu
+
+getMenuItem
+
+GET
+
+/menu/{id}
+
+createCustomer
+
+POST
+
+/customers
+
+listDiningTables
+
+GET
+
+/tables
+
+createReservation
+
+POST
+
+/reservations
+
+getReservation
+
+GET
+
+/reservations/{id}
+
+createOrder
+
+POST
+
+/orders
+
+getOrder
+
+GET
+
+/orders/{id}
+
+updateOrderStatus
+
+PATCH
+
+/orders/{id}/status
+
+listCustomerOrders
+
+GET
+
+/customers/{id}/orders
+
+openapi.yaml is the contract and source of truth for these endpoints.
+
+11. Business Rules
+
+Menu Pricing
+
+Menu prices are stored in SQLite.
+
+The client cannot provide or override the price when creating an order.
+
+The backend always reads the current price from the database.
+
+Order Total
+
+The server calculates:
+
+line_total = quantity × database menu price
+
+and:
+
+total = sum(all line totals)
+
+Unavailable Items
+
+Unavailable menu items cannot be ordered.
+
+Reservation Party Size
+
+The reservation must satisfy:
+
+party_size > 0
+
+and:
+
+party_size <= table seats
+
+Reservation Conflict
+
+The same table cannot have two active reservations at the same reservation time.
+
+Order Status
+
+Allowed statuses:
+
+NEW
+PREPARING
+READY
+COMPLETED
+CANCELLED
+
+Valid transitions:
+
+NEW → PREPARING
+NEW → CANCELLED
+PREPARING → READY
+READY → COMPLETED
+
+Other transitions are rejected.
+
+Historical Order Prices
+
+When an order is created, the current menu price is copied into order_items.unit_price_cents.
+
+Therefore, if the menu price changes later, historical orders keep their original unit price and total.
+
+12. Status State Machine
+
+                 ┌─────────────┐
+                 │     NEW     │
+                 └──────┬──────┘
+                        │
+             ┌──────────┴──────────┐
+             ▼                     ▼
+       ┌───────────┐        ┌───────────┐
+       │ PREPARING │        │ CANCELLED │
+       └─────┬─────┘        └───────────┘
+             │
+             ▼
+       ┌───────────┐
+       │   READY   │
+       └─────┬─────┘
+             │
+             ▼
+       ┌───────────┐
+       │ COMPLETED │
+       └───────────┘
+
+13. Project Structure
+
+lotus-task2/
+│
+├── .gitignore
+├── README.md
+├── openapi.yaml
+├── requirements.txt
+├── run-tests.sh
+├── schema.sql
+├── seed.sql
+│
+├── src/
+│   ├── app.py
+│   ├── db.py
+│   └── handlers.py
+│
+├── harness/
+│   ├── validate_openapi.py
+│   ├── reset_db.py
+│   └── contract.py
+│
+└── tests/
+    ├── test_menu.py
+    ├── test_orders.py
+    └── test_reservations.py
+
+restaurant.db is generated locally and is intentionally excluded from Git.
+
+14. Harness Design
+
+The Harness is separated from Restaurant-specific business logic.
+
+OpenAPI Validation
+
+harness/validate_openapi.py
+
+Validates the OpenAPI document before the application test flow starts.
+
+Database Reset
+
+harness/reset_db.py
+
+Creates a clean SQLite database using:
+
+schema.sql
+seed.sql
+
+Contract Checks
+
+harness/contract.py
+
+Runs HTTP-level checks against the API and verifies expected contract behavior.
+
+HTTP Tests
 
 tests/
-  test_menu.py            Tests for listMenu, getMenuItem
-  test_reservations.py    Tests for createCustomer, listDiningTables,
-                          createReservation, getReservation
-  test_orders.py          Tests for createOrder, getOrder,
-                          updateOrderStatus, listCustomerOrders
 
-requirements.txt
-run-tests.sh
-README.md
-```
+Uses Flask's HTTP test client and pytest rather than calling handler functions directly.
 
-## API endpoints
+This ensures the tests exercise the actual HTTP interface.
 
-| Method | Path | operationId |
-|--------|------|-------------|
-| GET | /menu | listMenu |
-| GET | /menu/{id} | getMenuItem |
-| POST | /customers | createCustomer |
-| GET | /tables | listDiningTables |
-| POST | /reservations | createReservation |
-| GET | /reservations/{id} | getReservation |
-| POST | /orders | createOrder |
-| GET | /orders/{id} | getOrder |
-| PATCH | /orders/{id}/status | updateOrderStatus |
-| GET | /customers/{id}/orders | listCustomerOrders |
+15. Test Coverage
 
-## Order status state machine
+The automated tests cover:
 
-```
-NEW ──► PREPARING ──► READY ──► COMPLETED
- │
- └──► CANCELLED
-```
+Menu listing
 
-COMPLETED and CANCELLED are terminal states — no further transitions are allowed.
+Menu item retrieval
 
-## Key design decisions
+Missing menu items
 
-- **Prices in integer cents** — `price_cents`, `unit_price_cents`, `line_total_cents`,
-  `total_cents` are all integers to avoid floating-point rounding errors.
-- **Historical price preservation** — `order_items.unit_price_cents` and
-  `order_items.line_total_cents` are written at INSERT time from the database and
-  never updated, even if the menu item price changes later.
-- **Backend-calculated totals** — `line_total_cents = unit_price_cents × quantity`;
-  `total_cents = SUM(line_total_cents)`. Neither is accepted from the client.
-- **400 vs 422** — 400 for field/schema validation failures; 422 for business-rule
-  violations (unavailable menu item, invalid status transition).
-- **FK enforcement** — `PRAGMA foreign_keys = ON` is set on every SQLite connection.
-- **Validation-first pipeline** — `openapi.yaml` is validated before any application
-  code runs, consistent with its role as the source of truth.
+Customer creation
+
+Dining table listing
+
+Reservation creation
+
+Reservation validation
+
+Reservation conflicts
+
+Order creation
+
+Database-driven pricing
+
+Order totals
+
+Unavailable menu items
+
+Order retrieval
+
+Order status transitions
+
+Invalid status transitions
+
+Customer order history
+
+Historical order prices
+
+OpenAPI request and response contract validation
+
+16. Adding a New Endpoint
+
+To add a new endpoint:
+
+1. Update OpenAPI
+
+Add the endpoint and its schema to:
+
+openapi.yaml
+
+Give the endpoint an operationId.
+
+2. Update the Backend
+
+Implement the endpoint in the appropriate source file:
+
+src/handlers.py
+
+and register the route in:
+
+src/app.py
+
+3. Add HTTP Tests
+
+Add tests under:
+
+tests/
+
+Use the Flask HTTP test client.
+
+4. Update Contract Checks
+
+If the new endpoint requires reusable contract validation, update:
+
+harness/contract.py
+
+5. Run the Full Pipeline
+
+bash run-tests.sh
+
+The OpenAPI validation must pass before the remaining tests run.
+
+17. Second-Fresher Dogfood Workflow
+
+A second Fresher should be able to use the repository without source-code coaching.
+
+They should only need:
+
+The GitHub repository
+
+This README
+
+openapi.yaml
+
+Recommended workflow:
+
+git clone https://github.com/thota-rojasree-19/lotus-task2.git
+cd lotus-task2
+pip install -r requirements.txt
+python harness/reset_db.py
+python src/app.py
+
+Then they should:
+
+Call GET /menu
+
+Create a customer with POST /customers
+
+Call GET /tables
+
+Select a suitable table
+
+Create a reservation with POST /reservations
+
+Create an order with two menu items using POST /orders
+
+Verify the server-calculated total using GET /orders/{id}
+
+Move the order through:
+
+NEW → PREPARING
+
+PREPARING → READY
+
+READY → COMPLETED
+
+Verify customer history using GET /customers/{id}/orders
+
+Run:
+
+bash run-tests.sh
+
+No Restaurant source-code changes should be necessary for this workflow.
+
+18. Key Design Decisions
+
+OpenAPI-First
+
+The OpenAPI document defines the HTTP contract and is validated before the application test flow.
+
+SQLite
+
+SQLite is used because it is lightweight, disposable, and suitable for deterministic local testing.
+
+Integer Prices
+
+Prices are stored as integer cents to avoid floating-point money calculations.
+
+Server-Side Pricing
+
+Order prices and totals are calculated from database values rather than trusted from client input.
+
+Historical Pricing
+
+The order item stores the unit price at order creation time so historical orders remain correct after menu price changes.
+
+Explicit State Machine
+
+Order status transitions are represented explicitly so invalid transitions can be rejected predictably.
+
+HTTP-Level Testing
+
+Tests use the HTTP interface instead of directly invoking business logic, making the tests closer to real API usage.
+
+Disposable Database
+
+The database can be reset at any time, making local and automated test runs predictable.
+
+19. Run Everything
+
+For a clean complete run:
+
+bash run-tests.sh
+
+This performs:
+
+OpenAPI validation
+        ↓
+Database reset
+        ↓
+Contract checks
+        ↓
+Pytest
+        ↓
+PASS / FAIL result
+
+20. Repository
+
+GitHub:
+
+https://github.com/thota-rojasree-19/lotus-task2
