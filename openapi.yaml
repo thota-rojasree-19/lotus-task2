@@ -1,0 +1,699 @@
+openapi: "3.0.3"
+
+info:
+  title: Restaurant API
+  version: "1.0.0"
+  description: >
+    REST API for the Lotus Restaurant management system.
+    Covers menu browsing, customer registration, dining-table listing,
+    table reservations, and order lifecycle management.
+    This file is the CONTRACT / SOURCE OF TRUTH for the SQLite interface harness.
+    All prices are sourced from the database; client-supplied prices are never trusted.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tags (grouping for documentation only)
+# ──────────────────────────────────────────────────────────────────────────────
+tags:
+  - name: Menu
+    description: Read-only access to menu categories and items
+  - name: Customers
+    description: Customer registration
+  - name: Tables
+    description: Dining table availability
+  - name: Reservations
+    description: Table reservation management
+  - name: Orders
+    description: Order placement and lifecycle management
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Paths
+# ──────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Menu ────────────────────────────────────────────────────────────────────
+
+  /menu:
+    get:
+      operationId: listMenu
+      summary: List all menu items
+      description: >
+        Returns every menu item regardless of availability.
+        The `available` field indicates whether the item can currently be ordered.
+        Clients MUST NOT attempt to order items where available is false.
+      tags:
+        - Menu
+      responses:
+        "200":
+          description: Array of menu items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MenuItem'
+
+  /menu/{id}:
+    get:
+      operationId: getMenuItem
+      summary: Get a single menu item by ID
+      tags:
+        - Menu
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        "200":
+          description: The requested menu item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItem'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── Customers ────────────────────────────────────────────────────────────────
+
+  /customers:
+    post:
+      operationId: createCustomer
+      summary: Register a new customer
+      description: >
+        Creates a new customer record. Email must be unique across all customers.
+        Returns 409 if a customer with the same email already exists.
+      tags:
+        - Customers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreate'
+      responses:
+        "201":
+          description: Customer created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "409":
+          $ref: '#/components/responses/Conflict'
+
+  # ── Dining Tables ─────────────────────────────────────────────────────────
+
+  /tables:
+    get:
+      operationId: listDiningTables
+      summary: List all dining tables
+      description: >
+        Returns every dining table in the restaurant with its seat count and
+        current availability status.
+      tags:
+        - Tables
+      responses:
+        "200":
+          description: Array of dining tables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DiningTable'
+
+  # ── Reservations ─────────────────────────────────────────────────────────
+
+  /reservations:
+    post:
+      operationId: createReservation
+      summary: Create a new table reservation
+      description: >
+        Books a specific dining table for a registered customer.
+        Business rules enforced by the server:
+          - customer_id must reference an existing customer (404 otherwise).
+          - table_id must reference an existing table (404 otherwise).
+          - party_size must be >= 1.
+          - party_size must not exceed the table's seat count (400 otherwise).
+          - The same table cannot have two active reservations at the identical
+            reservation_time (409 otherwise).
+        A newly created reservation has status "active".
+      tags:
+        - Reservations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreate'
+      responses:
+        "201":
+          description: Reservation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+
+  /reservations/{id}:
+    get:
+      operationId: getReservation
+      summary: Get a single reservation by ID
+      tags:
+        - Reservations
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        "200":
+          description: The requested reservation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── Orders ───────────────────────────────────────────────────────────────
+
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Place a new order
+      description: >
+        Creates a new order for a registered customer.
+        Business rules enforced by the server:
+          - customer_id must reference an existing customer (404 otherwise).
+          - items array must contain at least one entry.
+          - Every menu_item_id must reference an existing menu item (404 otherwise).
+          - Every referenced menu item must have available = true (422 otherwise).
+          - quantity must be >= 1 for every line item.
+          - unit_price_cents is sourced exclusively from the database at order time;
+            any price supplied by the client is silently ignored.
+          - total_cents is calculated by the backend as
+            SUM(unit_price_cents * quantity) for all items.
+          - Initial order status is NEW.
+        Historical unit_price_cents on order_items are preserved even if the
+        menu item price changes later.
+      tags:
+        - Orders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+      responses:
+        "201":
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "422":
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      summary: Get a single order with its line items
+      tags:
+        - Orders
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        "200":
+          description: The requested order including all line items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /orders/{id}/status:
+    patch:
+      operationId: updateOrderStatus
+      summary: Update the lifecycle status of an order
+      description: >
+        Advances or cancels an order according to the allowed state machine.
+        Permitted transitions:
+          NEW       -> PREPARING
+          NEW       -> CANCELLED
+          PREPARING -> READY
+          READY     -> COMPLETED
+        Any other transition (including attempts to move to NEW, or to change a
+        COMPLETED or CANCELLED order) returns 422.
+      tags:
+        - Orders
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderStatusUpdate'
+      responses:
+        "200":
+          description: Order returned with its updated status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "422":
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /customers/{id}/orders:
+    get:
+      operationId: listCustomerOrders
+      summary: List all orders placed by a specific customer
+      description: >
+        Returns every order belonging to the customer identified by {id}.
+        Returns 404 if the customer does not exist.
+        Returns an empty array [] if the customer exists but has no orders.
+      tags:
+        - Orders
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        "200":
+          description: Array of orders for this customer (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reusable Components
+# ──────────────────────────────────────────────────────────────────────────────
+components:
+
+  # ── Shared Parameters ──────────────────────────────────────────────────────
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      description: Integer primary key of the resource
+      schema:
+        type: integer
+        minimum: 1
+
+  # ── Schemas ────────────────────────────────────────────────────────────────
+  schemas:
+
+    # ── Customer ──────────────────────────────────────────────────────────────
+    CustomerCreate:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: "Jane Smith"
+        email:
+          type: string
+          format: email
+          example: "jane@example.com"
+        phone:
+          type: string
+          description: Optional contact phone number
+          example: "+1-555-0100"
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        name:
+          type: string
+          example: "Jane Smith"
+        email:
+          type: string
+          format: email
+          example: "jane@example.com"
+        phone:
+          type: string
+          nullable: true
+          example: "+1-555-0100"
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T12:00:00Z"
+
+    # ── Dining Table ──────────────────────────────────────────────────────────
+    DiningTable:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        table_number:
+          type: string
+          description: Human-readable label for the table (e.g. "T1", "Patio-3")
+          example: "T1"
+        seats:
+          type: integer
+          description: Maximum number of guests this table can accommodate
+          minimum: 1
+          example: 4
+        status:
+          type: string
+          enum:
+            - available
+            - reserved
+            - occupied
+          description: Current availability status of the table
+          example: "available"
+
+    # ── Menu Category ─────────────────────────────────────────────────────────
+    MenuCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        name:
+          type: string
+          example: "Starters"
+
+    # ── Menu Item ─────────────────────────────────────────────────────────────
+    MenuItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        category_id:
+          type: integer
+          example: 1
+        category_name:
+          type: string
+          readOnly: true
+          description: Denormalized category label, resolved by the server from menu_categories
+          example: "Starters"
+        name:
+          type: string
+          example: "Garlic Bread"
+        description:
+          type: string
+          nullable: true
+          example: "Toasted sourdough with roasted garlic butter"
+        price_cents:
+          type: integer
+          description: >
+            Price in integer cents, sourced exclusively from the database.
+            This value is never accepted from clients during order creation.
+          minimum: 0
+          example: 499
+        available:
+          type: boolean
+          description: Whether this item can currently be ordered. Items with available=false must be rejected at order time.
+          example: true
+
+    # ── Reservation ───────────────────────────────────────────────────────────
+    ReservationCreate:
+      type: object
+      required:
+        - customer_id
+        - table_id
+        - party_size
+        - reservation_time
+      properties:
+        customer_id:
+          type: integer
+          description: Must reference an existing customer
+          example: 1
+        table_id:
+          type: integer
+          description: Must reference an existing dining table
+          example: 2
+        party_size:
+          type: integer
+          minimum: 1
+          description: >
+            Number of guests. Must be >= 1 and must not exceed the table's
+            seat count. The server returns 400 if this constraint is violated.
+          example: 3
+        reservation_time:
+          type: string
+          format: date-time
+          description: >
+            ISO 8601 UTC datetime for the reservation slot.
+            The same table_id cannot have two active reservations at the
+            identical reservation_time; the server returns 409 on conflict.
+          example: "2024-06-01T19:00:00Z"
+
+    Reservation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        customer_id:
+          type: integer
+          example: 1
+        table_id:
+          type: integer
+          example: 2
+        party_size:
+          type: integer
+          example: 3
+        reservation_time:
+          type: string
+          format: date-time
+          example: "2024-06-01T19:00:00Z"
+        status:
+          type: string
+          enum:
+            - active
+            - cancelled
+            - completed
+          readOnly: true
+          description: Lifecycle status of the reservation. Newly created reservations start as "active".
+          example: "active"
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T12:00:00Z"
+
+    # ── Order ─────────────────────────────────────────────────────────────────
+    OrderItemRequest:
+      type: object
+      required:
+        - menu_item_id
+        - quantity
+      properties:
+        menu_item_id:
+          type: integer
+          description: Must reference an existing, available menu item
+          example: 3
+        quantity:
+          type: integer
+          minimum: 1
+          description: Number of units of this item. Must be >= 1.
+          example: 2
+
+    OrderItemResponse:
+      type: object
+      description: >
+        A line item within an order.
+        unit_price_cents and line_total_cents are captured from the database at
+        order creation time and preserved historically. They are never sourced
+        from the client and are never updated, even if the menu item price changes later.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        order_id:
+          type: integer
+          readOnly: true
+          example: 1
+        menu_item_id:
+          type: integer
+          example: 3
+        quantity:
+          type: integer
+          example: 2
+        unit_price_cents:
+          type: integer
+          readOnly: true
+          description: >
+            Price per unit in cents at the time the order was placed.
+            Sourced exclusively from the database; never accepted from clients.
+          example: 499
+        line_total_cents:
+          type: integer
+          readOnly: true
+          description: >
+            unit_price_cents x quantity, calculated and stored at order creation time.
+            Preserved historically; never updated.
+          example: 998
+
+    OrderCreate:
+      type: object
+      required:
+        - customer_id
+        - items
+      properties:
+        customer_id:
+          type: integer
+          description: Must reference an existing customer
+          example: 1
+        items:
+          type: array
+          minItems: 1
+          description: One or more line items. Must contain at least one entry.
+          items:
+            $ref: '#/components/schemas/OrderItemRequest'
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        customer_id:
+          type: integer
+          example: 1
+        status:
+          type: string
+          enum:
+            - NEW
+            - PREPARING
+            - READY
+            - COMPLETED
+            - CANCELLED
+          readOnly: true
+          description: >
+            Lifecycle status of the order.
+            Newly created orders start as NEW.
+            Allowed transitions: NEW->PREPARING, NEW->CANCELLED,
+            PREPARING->READY, READY->COMPLETED.
+          example: "NEW"
+        items:
+          type: array
+          readOnly: true
+          description: Line items belonging to this order
+          items:
+            $ref: '#/components/schemas/OrderItemResponse'
+        total_cents:
+          type: integer
+          readOnly: true
+          description: >
+            Backend-calculated total: SUM(unit_price_cents * quantity) for all
+            items. Never accepted from the client.
+          example: 998
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T12:00:00Z"
+
+    OrderStatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - PREPARING
+            - READY
+            - COMPLETED
+            - CANCELLED
+          description: >
+            Target status for the order. The server validates that the
+            transition from the current status is permitted:
+              NEW       -> PREPARING  (allowed)
+              NEW       -> CANCELLED  (allowed)
+              PREPARING -> READY      (allowed)
+              READY     -> COMPLETED  (allowed)
+            All other transitions return 422 Unprocessable Entity.
+            NEW is excluded from this enum because no transition leads to NEW.
+          example: "PREPARING"
+
+    # ── Error ─────────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable description of what went wrong
+          example: "Resource not found"
+
+  # ── Reusable Responses ─────────────────────────────────────────────────────
+  responses:
+
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Resource not found"
+
+    BadRequest:
+      description: >
+        The request body or path parameters are syntactically invalid or violate
+        a simple field-level constraint (e.g. missing required field, party_size
+        exceeds seat count).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "party_size exceeds table seat count"
+
+    Conflict:
+      description: >
+        A uniqueness constraint was violated. Examples: duplicate customer email,
+        or the same table already has an active reservation at the requested time.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Table already has an active reservation at this time"
+
+    UnprocessableEntity:
+      description: >
+        The request is syntactically valid but violates a business rule.
+        Examples: ordering an unavailable menu item, or requesting an invalid
+        order status transition.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid status transition: READY -> NEW"
