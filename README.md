@@ -22,7 +22,7 @@ Run the complete workflow with one command
 
 Be reused for additional OpenAPI endpoints
 
-The project does not include a frontend because the SOW focuses on the HTTP interface, SQLite backend, and reusable testing Harness.
+Note: No frontend is included because the SOW focuses on the HTTP interface, SQLite backend, and reusable testing Harness.
 
 2. Prerequisites
 
@@ -38,6 +38,9 @@ python --version
 
 3. Clone the Repository
 
+GitHub Repository:
+https://github.com/thota-rojasree-19/lotus-task2
+
 git clone https://github.com/thota-rojasree-19/lotus-task2.git
 cd lotus-task2
 
@@ -45,7 +48,7 @@ cd lotus-task2
 
 pip install -r requirements.txt
 
-5. Database Setup and Reset
+5. Database Setup & Reset
 
 The project uses SQLite.
 
@@ -58,7 +61,7 @@ The database is disposable and is recreated from:
 schema.sql
 seed.sql
 
-Reset the database manually:
+To reset the database manually:
 
 python harness/reset_db.py
 
@@ -70,9 +73,7 @@ Run:
 
 python src/app.py
 
-The Flask API starts locally.
-
-The API can then be accessed at:
+The Flask API starts locally at:
 
 http://127.0.0.1:5000
 
@@ -86,13 +87,10 @@ bash run-tests.sh
 
 The pipeline runs in this order:
 
-Validate openapi.yaml
-
-Reset the SQLite database
-
-Run contract checks
-
-Run pytest HTTP tests
+1. Validate openapi.yaml
+2. Reset the SQLite database
+3. Run contract checks
+4. Run pytest HTTP tests
 
 A successful run ends with:
 
@@ -126,7 +124,7 @@ curl http://127.0.0.1:5000/menu
 
 Choose a menu item ID from the response.
 
-For example:
+Example:
 
 menu_item_id = 1
 
@@ -136,7 +134,7 @@ curl -X POST http://127.0.0.1:5000/customers   -H "Content-Type: application/jso
 
 Save the returned customer ID.
 
-For example:
+Example:
 
 customer_id = 3
 
@@ -146,7 +144,7 @@ curl http://127.0.0.1:5000/tables
 
 Choose a table with at least 2 seats.
 
-For example:
+Example:
 
 table_id = 2
 
@@ -154,7 +152,13 @@ Step 4 – Create Reservation
 
 curl -X POST http://127.0.0.1:5000/reservations   -H "Content-Type: application/json"   -d '{"customer_id":3,"table_id":2,"reservation_time":"2026-09-10T19:00:00","party_size":2}'
 
-The reservation should be created successfully if the table has enough seats and there is no conflicting active reservation.
+The reservation should be created successfully if:
+
+The table exists
+
+The table has enough seats
+
+There is no conflicting active reservation
 
 Step 5 – Create Order
 
@@ -166,7 +170,7 @@ The client does not supply or control the price.
 
 Save the returned order ID.
 
-For example:
+Example:
 
 order_id = 1
 
@@ -202,15 +206,15 @@ There is also:
 
 NEW → CANCELLED
 
-Example:
+NEW → PREPARING
 
 curl -X PATCH http://127.0.0.1:5000/orders/1/status   -H "Content-Type: application/json"   -d '{"status":"PREPARING"}'
 
-Then:
+PREPARING → READY
 
 curl -X PATCH http://127.0.0.1:5000/orders/1/status   -H "Content-Type: application/json"   -d '{"status":"READY"}'
 
-Then:
+READY → COMPLETED
 
 curl -X PATCH http://127.0.0.1:5000/orders/1/status   -H "Content-Type: application/json"   -d '{"status":"COMPLETED"}'
 
@@ -347,15 +351,17 @@ NEW → CANCELLED
 PREPARING → READY
 READY → COMPLETED
 
-Other transitions are rejected.
+All other transitions are rejected.
 
 Historical Order Prices
 
-When an order is created, the current menu price is copied into order_items.unit_price_cents.
+When an order is created, the current menu price is copied into:
+
+order_items.unit_price_cents
 
 Therefore, if the menu price changes later, historical orders keep their original unit price and total.
 
-12. Status State Machine
+12. Order Status State Machine
 
                  ┌─────────────┐
                  │     NEW     │
@@ -404,7 +410,7 @@ lotus-task2/
     ├── test_orders.py
     └── test_reservations.py
 
-restaurant.db is generated locally and is intentionally excluded from Git.
+restaurant.db is generated locally and intentionally excluded from Git.
 
 14. Harness Design
 
@@ -493,7 +499,7 @@ Give the endpoint an operationId.
 
 2. Update the Backend
 
-Implement the endpoint in the appropriate source file:
+Implement the endpoint in:
 
 src/handlers.py
 
@@ -527,13 +533,13 @@ A second Fresher should be able to use the repository without source-code coachi
 
 They should only need:
 
-The GitHub repository
+GitHub repository
 
-This README
+README.md
 
 openapi.yaml
 
-Recommended workflow:
+Recommended Workflow
 
 git clone https://github.com/thota-rojasree-19/lotus-task2.git
 cd lotus-task2
@@ -627,6 +633,5 @@ PASS / FAIL result
 
 20. Repository
 
-GitHub:
-
+🔗 GitHub:
 https://github.com/thota-rojasree-19/lotus-task2
