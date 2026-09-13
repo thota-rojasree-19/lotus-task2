@@ -328,3 +328,67 @@ OpenAPI validation
 ## 20. Repository
 
 [https://github.com/thota-rojasree-19/lotus-task2](https://github.com/thota-rojasree-19/lotus-task2)
+
+## 21. Product 005: Generic OpenAPI-to-MCP Gateway
+
+The Product 005 module introduces a generic Model Context Protocol (MCP) gateway that automatically exposes the Product 004 REST API endpoints as MCP tools by reading the existing `openapi.yaml`.
+
+### Prerequisites
+- Python 3.13
+- `fastmcp==4.0.3`
+- `httpx`
+- `pyyaml`
+- `pytest`
+- `pytest-asyncio`
+
+### Architecture
+The MCP Gateway uses FastMCP to dynamically parse `openapi.yaml` and expose 10 operations as MCP tools over a streamable-HTTP transport. The gateway translates tool calls to REST HTTP requests, passing them to the running Flask backend.
+
+### Environment Variables
+- `OPENAPI_FILE` (default: `./openapi.yaml`)
+- `API_BASE_URL` (default: `http://127.0.0.1:5000`)
+- `MCP_HOST` (default: `127.0.0.1`)
+- `MCP_PORT` (default: `8000`)
+
+### How to Run
+
+1. **Start the Product 004 Backend**
+```bash
+python harness/reset_db.py
+export FLASK_APP=src.app:app
+flask run --port=5000
+```
+
+2. **Start the MCP Gateway**
+```bash
+./run-mcp.sh
+```
+
+### Endpoints
+- **MCP Streamable Transport URL:** `http://127.0.0.1:8000/mcp`
+- **Swagger UI:** `http://127.0.0.1:8000/docs`
+
+### Discovering and Calling Tools
+Tools are discovered via the standard MCP protocol (`list_tools`). The tool names match the `operationIds` exactly (e.g., `listMenu`, `createCustomer`). 
+
+To call tools via an MCP client:
+1. Connect to the `http://127.0.0.1:8000/mcp` SSE endpoint.
+2. Send `call_tool` with the tool name and flattened input schema parameters.
+
+### Testing
+Run the full acceptance flow:
+```bash
+./run-tests-mcp.sh
+```
+Or use the provided python wrapper (if bash is unavailable):
+```cmd
+python run-tests-mcp.py
+```
+
+### Cross-Fresher Configuration
+To test the gateway with another Fresher's passing API implementation, you can change the environment variables:
+```bash
+export OPENAPI_FILE=/path/to/other/openapi.yaml
+export API_BASE_URL=http://other-api-host:5000
+./run-mcp.sh
+```
