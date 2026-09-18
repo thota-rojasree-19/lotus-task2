@@ -1,9 +1,11 @@
 import asyncio
 import os
+import pytest
 from mcp_gateway.server import mcp
 from fastmcp.client import Client
 from fastmcp.exceptions import ToolError
 
+@pytest.mark.asyncio
 async def test():
     print("Testing API down...")
     try:
@@ -15,4 +17,5 @@ async def test():
     except Exception as e:
         print("Caught Exception:", e)
 
-asyncio.run(test())
+if __name__ == '__main__':
+    asyncio.run(test())
